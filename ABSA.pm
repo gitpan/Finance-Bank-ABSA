@@ -1,7 +1,7 @@
 package Finance::Bank::ABSA;
 use strict;
 use Carp;
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 use WWW::Mechanize;
 use HTML::TokeParser;
 
@@ -33,18 +33,16 @@ sub check_ABSA_balance {
     # This is in order to not need to provide the whole password over the Net!
     my $testpwdDgt = HTML::TokeParser->new(\$agent->content) or die "$!";
     $testpwdDgt->get_tag("form");
-    my $pwdToken;
-    my $pwdDgtcounter = 0;
 
     # Go to first input field in form.
-    $pwdToken = $testpwdDgt->get_tag("input");
-    while ( $pwdToken->[1]{name} =~ /pwdDgt\d/ )  # Step through all pwdDgt fields only
+    my $pwdToken = $testpwdDgt->get_tag("input");
+    while ( $pwdToken->[1]{name} =~ /pwdDgt(\d+)/ )  # Step through all pwdDgt fields only
+                                                     # Setting $1 to the pwdDgt number
     {
       if ( $pwdToken->[1]{class} eq "jc-pwdDgt" ) {   # AHA - they want this char!
-        $agent->field($pwdToken->[1]{name}, @secletter[$pwdDgtcounter]);
+        $agent->field($pwdToken->[1]{name}, @secletter[$1]);
       }
       $pwdToken = $testpwdDgt->get_tag("input");
-      $pwdDgtcounter++;
     } 
 
     $agent->click("button_processAuthPassword");
@@ -60,12 +58,11 @@ sub check_ABSA_balance {
     $stream->get_tag("tr");
     $stream->get_tag("tr");
     $stream->get_tag("tr");
-    #print "Hello";
+
     while (my $token = $stream->get_tag("tr")) {
        $token = $stream->get_tag("td");
        if ($token->[1]{width} eq "5") {
          $stream->get_tag("td");
-         # We have an account!
          my $accountname = $stream->get_trimmed_text("/td");
          $stream->get_tag("td");
          my $accountnumber = $stream->get_trimmed_text("/td");
@@ -77,8 +74,8 @@ sub check_ABSA_balance {
 
          # Octal 240 is used from HTML3.2 spec to replace &nbsp;
          # See Entities.pm under your perl vendor tree
-         # I choose to replace it here to cater for later formatting correctly.
-         $accountbalance   =~ s/,/./;
+         # I choose to replace it here to easily/correctly cater for later formatting.
+         $accountbalance   =~ s/[, ]/./g;
          $accountbalance   =~ s/\240//g;
          $accountavailable =~ s/[, ]/./g;
          $accountavailable =~ s/\240//g;
